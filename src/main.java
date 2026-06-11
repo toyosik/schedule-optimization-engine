@@ -1,90 +1,54 @@
 import java.util.*;
 
-public class ScheduleOptimizer {
+public class Main {
+    public static void main(String[] args) {
+        System.out.println("Initializing Schedule Optimization Engine simulation...");
 
-    // Represents a Course (Node/Vertex in the conflict graph)
-    public static class Course {
-        String id;
-        List<String> allowedSlots; // Domain of possible time slots
+        // Define available time slots (Domains)
+        List<String> timeSlots = Arrays.asList("Slot_A", "Slot_B", "Slot_C", "Slot_D", "Slot_E");
 
-        public Course(String id, List<String> allowedSlots) {
-            this.id = id;
-            this.allowedSlots = allowedSlots;
-        }
-    }
+        // Scale factor: 2,000 courses with 5 slot options each = 10,000 combinations
+        int totalCourses = 2000; 
+        List<ScheduleOptimizer.Course> courses = new ArrayList<>();
 
-    private final List<Course> courses;
-    // Adjacency list representing conflicts (edges). 
-    // If course A and B share an instructor or student group, they have an edge.
-    private final Map<String, Set<String>> conflictGraph; 
-
-    public ScheduleOptimizer(List<Course> courses) {
-        this.courses = courses;
-        this.conflictGraph = new HashMap<>();
-        for (Course c : courses) {
-            conflictGraph.put(c.id, new HashSet<>());
-        }
-    }
-
-    // Add a conflict edge between two courses (they cannot share the same time slot)
-    public void addConflict(String courseId1, String courseId2) {
-        if (conflictGraph.containsKey(courseId1) && conflictGraph.containsKey(courseId2)) {
-            conflictGraph.get(courseId1).add(courseId2);
-            conflictGraph.get(courseId2).add(courseId1);
-        }
-    }
-
-    // Entry point for the optimization engine
-    public Map<String, String> optimize() {
-        Map<String, String> assignments = new HashMap<>();
-        
-        // Sort courses using the MRV (Minimum Remaining Values) heuristic to optimize search path
-        List<Course> sortedCourses = new ArrayList<>(courses);
-        sortedCourses.sort(Comparator.comparingInt(c -> c.allowedSlots.size()));
-
-        if (backtrack(0, sortedCourses, assignments)) {
-            return assignments;
-        }
-        return null; // Return null if no conflict-free schedule is mathematically possible
-    }
-
-    // Recursive CSP backtracking algorithm
-    private boolean backtrack(int index, List<Course> sortedCourses, Map<String, String> assignments) {
-        // Base Case: All courses have been successfully assigned a conflict-free slot
-        if (index == sortedCourses.size()) {
-            return true;
+        for (int i = 0; i < totalCourses; i++) {
+            courses.add(new ScheduleOptimizer.Course("CS_" + i, timeSlots));
         }
 
-        Course currentCourse = sortedCourses.get(index);
+        ScheduleOptimizer optimizer = new ScheduleOptimizer(courses);
 
-        for (String slot : currentCourse.allowedSlots) {
-            if (isConsistent(currentCourse.id, slot, assignments)) {
-                // Place assignment
-                assignments.put(currentCourse.id, slot);
-
-                // Forward Check: Proceed to next course
-                if (backtrack(index + 1, sortedCourses, assignments)) {
-                    return true;
+        // Inject realistic random scheduling constraints/conflicts into the graph
+        Random rand = new Random(42); // Seeded for consistency
+        for (int i = 0; i < totalCourses; i++) {
+            // Give each course 3 random conflicting neighbors to build a complex graph matrix
+            for (int j = 0; j < 3; j++) {
+                int conflictTarget = rand.nextInt(totalCourses);
+                if (conflictTarget != i) {
+                    optimizer.addConflict("CS_" + i, "CS_" + conflictTarget);
                 }
-
-                // Backtrack: Remove assignment if it led to a dead end down the line
-                assignments.remove(currentCourse.id);
             }
         }
-        return false;
-    }
 
-    // Constraint Validation Check (Graph Node Consistency verification)
-    private boolean isConsistent(String courseId, String slot, Map<String, String> assignments) {
-        Set<String> conflicts = conflictGraph.get(courseId);
-        if (conflicts == null) return true;
+        System.out.println("Running graph constraint-solving calculations...");
+        
+        // Performance Profiling Execution
+        long startTime = System.nanoTime();
+        Map<String, String> solution = optimizer.optimize();
+        long endTime = System.nanoTime();
 
-        for (String neighborId : conflicts) {
-            // If an adjacent node in the graph already has this time slot assigned, it's a conflict
-            if (assignments.containsKey(neighborId) && assignments.get(neighborId).equals(slot)) {
-                return false; 
+        double executionTimeMs = (endTime - startTime) / 1_000_000.0;
+
+        if (solution != null) {
+            System.out.println("\n=== OPTIMIZATION SUCCESSFUL ===");
+            System.out.printf("Total Combinations Tracked: %,d%n", totalCourses * timeSlots.size());
+            System.out.printf("Execution Engine Time: %.2f ms%n", executionTimeMs);
+            System.out.println("Sample Assignments (First 5 courses):");
+            for (int i = 0; i < 5; i++) {
+                String courseId = "CS_" + i;
+                System.out.println("  " + courseId + " assigned to -> " + solution.get(courseId));
             }
+        } else {
+            System.out.println("Optimization failed: Mathematical dead-end. No conflict-free matrix exists.");
         }
-        return true;
     }
 }
